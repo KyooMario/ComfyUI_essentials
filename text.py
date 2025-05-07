@@ -1,34 +1,38 @@
 import os
+
 import torch
-from nodes import MAX_RESOLUTION
 import torchvision.transforms.v2 as T
+
+from nodes import MAX_RESOLUTION
+from comfy.comfy_types import IO, ComfyNodeABC, CheckLazyMixin
+
 from .utils import FONTS_DIR
 
-class DrawText:
+class DrawText(ComfyNodeABC):
     @classmethod
     def INPUT_TYPES(s):
         return {
             "required": {
-                "text": ("STRING", { "multiline": True, "dynamicPrompts": True, "default": "Hello, World!" }),
+                "text": (IO.STRING, { "multiline": True, "dynamicPrompts": True, "default": "Hello, World!" }),
                 "font": (sorted([f for f in os.listdir(FONTS_DIR) if f.endswith('.ttf') or f.endswith('.otf')]), ),
-                "size": ("INT", { "default": 56, "min": 1, "max": 9999, "step": 1 }),
-                "color": ("STRING", { "multiline": False, "default": "#FFFFFF" }),
-                "background_color": ("STRING", { "multiline": False, "default": "#00000000" }),
-                "shadow_distance": ("INT", { "default": 0, "min": 0, "max": 100, "step": 1 }),
-                "shadow_blur": ("INT", { "default": 0, "min": 0, "max": 100, "step": 1 }),
-                "shadow_color": ("STRING", { "multiline": False, "default": "#000000" }),
+                "size": (IO.INT, { "default": 56, "min": 1, "max": 9999, "step": 1 }),
+                "color": (IO.STRING, { "multiline": False, "default": "#FFFFFF" }),
+                "background_color": (IO.STRING, { "multiline": False, "default": "#00000000" }),
+                "shadow_distance": (IO.INT, { "default": 0, "min": 0, "max": 100, "step": 1 }),
+                "shadow_blur": (IO.INT, { "default": 0, "min": 0, "max": 100, "step": 1 }),
+                "shadow_color": (IO.STRING, { "multiline": False, "default": "#000000" }),
                 "horizontal_align": (["left", "center", "right"],),
                 "vertical_align": (["top", "center", "bottom"],),
-                "offset_x": ("INT", { "default": 0, "min": -MAX_RESOLUTION, "max": MAX_RESOLUTION, "step": 1 }),
-                "offset_y": ("INT", { "default": 0, "min": -MAX_RESOLUTION, "max": MAX_RESOLUTION, "step": 1 }),
+                "offset_x": (IO.INT, { "default": 0, "min": -MAX_RESOLUTION, "max": MAX_RESOLUTION, "step": 1 }),
+                "offset_y": (IO.INT, { "default": 0, "min": -MAX_RESOLUTION, "max": MAX_RESOLUTION, "step": 1 }),
                 "direction": (["ltr", "rtl"],),
             },
             "optional": {
-                "img_composite": ("IMAGE",),
+                "img_composite": (IO.IMAGE,),
             },
         }
 
-    RETURN_TYPES = ("IMAGE", "MASK",)
+    RETURN_TYPES = (IO.IMAGE, IO.MASK,)
     FUNCTION = "execute"
     CATEGORY = "essentials/text"
 
@@ -71,7 +75,7 @@ class DrawText:
                 x = (width - line_width) / 2
             elif horizontal_align == "right":
                 x = width - line_width
-            
+
             if vertical_align == "top":
                 y = 0
             elif vertical_align == "center":
@@ -99,7 +103,7 @@ class DrawText:
 
         if img_composite is not None:
             image = Image.alpha_composite(img_composite, image)
-        
+
         image = T.ToTensor()(image).unsqueeze(0).permute([0,2,3,1])
 
         return (image[:, :, :, :3], mask,)

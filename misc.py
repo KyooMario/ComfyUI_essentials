@@ -1,97 +1,99 @@
+import time
 import math
 import torch
-from .utils import AnyType
+
 import comfy.model_management
 from nodes import MAX_RESOLUTION
-import time
+from comfy.comfy_types import IO, ComfyNodeABC, CheckLazyMixin
 
-any = AnyType("*")
 
-class SimpleMathFloat:
+
+
+class SimpleMathFloat(ComfyNodeABC):
     @classmethod
     def INPUT_TYPES(s):
         return {
             "required": {
-                "value": ("FLOAT", { "default": 0.0, "min": -0xffffffffffffffff, "max": 0xffffffffffffffff, "step": 0.05 }),
+                "value": (IO.FLOAT, { "default": 0.0, "min": -0xffffffffffffffff, "max": 0xffffffffffffffff, "step": 0.05 }),
             },
         }
 
-    RETURN_TYPES = ("FLOAT", )
+    RETURN_TYPES = (IO.FLOAT, )
     FUNCTION = "execute"
     CATEGORY = "essentials/utilities"
 
     def execute(self, value):
         return (float(value), )
 
-class SimpleMathPercent:
+class SimpleMathPercent(ComfyNodeABC):
     @classmethod
     def INPUT_TYPES(s):
         return {
             "required": {
-                "value": ("FLOAT", { "default": 0.0, "min": 0, "max": 1, "step": 0.05 }),
+                "value": (IO.FLOAT, { "default": 0.0, "min": 0, "max": 1, "step": 0.05 }),
             },
         }
 
-    RETURN_TYPES = ("FLOAT", )
+    RETURN_TYPES = (IO.FLOAT, )
     FUNCTION = "execute"
     CATEGORY = "essentials/utilities"
 
     def execute(self, value):
         return (float(value), )
 
-class SimpleMathInt:
+class SimpleMathInt(ComfyNodeABC):
     @classmethod
     def INPUT_TYPES(s):
         return {
             "required": {
-                "value": ("INT", { "default": 0, "min": -0xffffffffffffffff, "max": 0xffffffffffffffff, "step": 1 }),
+                "value": (IO.INT, { "default": 0, "min": -0xffffffffffffffff, "max": 0xffffffffffffffff, "step": 1 }),
             },
         }
 
-    RETURN_TYPES = ("INT",)
+    RETURN_TYPES = (IO.INT,)
     FUNCTION = "execute"
     CATEGORY = "essentials/utilities"
 
     def execute(self, value):
         return (int(value), )
 
-class SimpleMathSlider:
+class SimpleMathSlider(ComfyNodeABC):
     @classmethod
     def INPUT_TYPES(s):
         return {
             "required": {
-                "value": ("FLOAT", { "display": "slider", "default": 0.5, "min": 0.0, "max": 1.0, "step": 0.001 }),
-                "min": ("FLOAT", { "default": 0.0, "min": -0xffffffffffffffff, "max": 0xffffffffffffffff, "step": 0.001 }),
-                "max": ("FLOAT", { "default": 1.0, "min": -0xffffffffffffffff, "max": 0xffffffffffffffff, "step": 0.001 }),
-                "rounding": ("INT", { "default": 0, "min": 0, "max": 10, "step": 1 }),
+                "value": (IO.FLOAT, { "display": "slider", "default": 0.5, "min": 0.0, "max": 1.0, "step": 0.001 }),
+                "min": (IO.FLOAT, { "default": 0.0, "min": -0xffffffffffffffff, "max": 0xffffffffffffffff, "step": 0.001 }),
+                "max": (IO.FLOAT, { "default": 1.0, "min": -0xffffffffffffffff, "max": 0xffffffffffffffff, "step": 0.001 }),
+                "rounding": (IO.INT, { "default": 0, "min": 0, "max": 10, "step": 1 }),
             },
         }
 
-    RETURN_TYPES = ("FLOAT", "INT",)
+    RETURN_TYPES = (IO.FLOAT, IO.INT,)
     FUNCTION = "execute"
     CATEGORY = "essentials/utilities"
 
     def execute(self, value, min, max, rounding):
         value = min + value * (max - min)
-        
+
         if rounding > 0:
             value = round(value, rounding)
 
         return (value, int(value), )
 
-class SimpleMathSliderLowRes:
+class SimpleMathSliderLowRes(ComfyNodeABC):
     @classmethod
     def INPUT_TYPES(s):
         return {
             "required": {
-                "value": ("INT", { "display": "slider", "default": 5, "min": 0, "max": 10, "step": 1 }),
-                "min": ("FLOAT", { "default": 0.0, "min": -0xffffffffffffffff, "max": 0xffffffffffffffff, "step": 0.001 }),
-                "max": ("FLOAT", { "default": 1.0, "min": -0xffffffffffffffff, "max": 0xffffffffffffffff, "step": 0.001 }),
-                "rounding": ("INT", { "default": 0, "min": 0, "max": 10, "step": 1 }),
+                "value": (IO.INT, { "display": "slider", "default": 5, "min": 0, "max": 10, "step": 1 }),
+                "min": (IO.FLOAT, { "default": 0.0, "min": -0xffffffffffffffff, "max": 0xffffffffffffffff, "step": 0.001 }),
+                "max": (IO.FLOAT, { "default": 1.0, "min": -0xffffffffffffffff, "max": 0xffffffffffffffff, "step": 0.001 }),
+                "rounding": (IO.INT, { "default": 0, "min": 0, "max": 10, "step": 1 }),
             },
         }
 
-    RETURN_TYPES = ("FLOAT", "INT",)
+    RETURN_TYPES = (IO.FLOAT, IO.INT,)
     FUNCTION = "execute"
     CATEGORY = "essentials/utilities"
 
@@ -103,37 +105,37 @@ class SimpleMathSliderLowRes:
 
         return (value, )
 
-class SimpleMathBoolean:
+class SimpleMathBoolean(ComfyNodeABC):
     @classmethod
     def INPUT_TYPES(s):
         return {
             "required": {
-                "value": ("BOOLEAN", { "default": False }),
+                "value": (IO.BOOLEAN, { "default": False }),
             },
         }
 
-    RETURN_TYPES = ("BOOLEAN",)
+    RETURN_TYPES = (IO.BOOLEAN,)
     FUNCTION = "execute"
     CATEGORY = "essentials/utilities"
 
     def execute(self, value):
         return (value, int(value), )
 
-class SimpleMath:
+class SimpleMath(ComfyNodeABC):
     @classmethod
     def INPUT_TYPES(s):
         return {
             "optional": {
-                "a": (any, { "default": 0.0 }),
-                "b": (any, { "default": 0.0 }),
-                "c": (any, { "default": 0.0 }),
+                "a": (IO.ANY, { "default": 0.0 }),
+                "b": (IO.ANY, { "default": 0.0 }),
+                "c": (IO.ANY, { "default": 0.0 }),
             },
             "required": {
-                "value": ("STRING", { "multiline": False, "default": "" }),
+                "value": (IO.STRING, { "multiline": False, "default": "" }),
             },
         }
 
-    RETURN_TYPES = ("INT", "FLOAT", )
+    RETURN_TYPES = (IO.INT, IO.FLOAT, )
     FUNCTION = "execute"
     CATEGORY = "essentials/utilities"
 
@@ -159,7 +161,7 @@ class SimpleMath:
             c = float(c)
         if isinstance(d, str):
             d = float(d)
-        
+
         operators = {
             ast.Add: op.add,
             ast.Sub: op.sub,
@@ -233,26 +235,26 @@ class SimpleMath:
 
         if math.isnan(result):
             result = 0.0
-        
+
         return (round(result), result, )
 
-class SimpleMathDual:
+class SimpleMathDual(ComfyNodeABC):
     @classmethod
     def INPUT_TYPES(s):
         return {
             "optional": {
-                "a": (any, { "default": 0.0 }),
-                "b": (any, { "default": 0.0 }),
-                "c": (any, { "default": 0.0 }),
-                "d": (any, { "default": 0.0 }),
+                "a": (IO.ANY, { "default": 0.0 }),
+                "b": (IO.ANY, { "default": 0.0 }),
+                "c": (IO.ANY, { "default": 0.0 }),
+                "d": (IO.ANY, { "default": 0.0 }),
             },
             "required": {
-                "value_1": ("STRING", { "multiline": False, "default": "" }),
-                "value_2": ("STRING", { "multiline": False, "default": "" }),
+                "value_1": (IO.STRING, { "multiline": False, "default": "" }),
+                "value_2": (IO.STRING, { "multiline": False, "default": "" }),
             },
         }
-    
-    RETURN_TYPES = ("INT", "FLOAT", "INT", "FLOAT", )
+
+    RETURN_TYPES = (IO.INT, IO.FLOAT, IO.INT, IO.FLOAT, )
     RETURN_NAMES = ("int_1", "float_1", "int_2", "float_2" )
     FUNCTION = "execute"
     CATEGORY = "essentials/utilities"
@@ -260,30 +262,30 @@ class SimpleMathDual:
     def execute(self, value_1, value_2, a = 0.0, b = 0.0, c = 0.0, d = 0.0):
         return SimpleMath().execute(value_1, a, b, c, d) + SimpleMath().execute(value_2, a, b, c, d)
 
-class SimpleMathCondition:
+class SimpleMathCondition(ComfyNodeABC):
     @classmethod
     def INPUT_TYPES(s):
         return {
             "optional": {
-                "a": (any, { "default": 0.0 }),
-                "b": (any, { "default": 0.0 }),
-                "c": (any, { "default": 0.0 }),
+                "a": (IO.ANY, { "default": 0.0 }),
+                "b": (IO.ANY, { "default": 0.0 }),
+                "c": (IO.ANY, { "default": 0.0 }),
             },
             "required": {
-                "evaluate": (any, {"default": 0}),
-                "on_true": ("STRING", { "multiline": False, "default": "" }),
-                "on_false": ("STRING", { "multiline": False, "default": "" }),
+                "evaluate": (IO.ANY, {"default": 0}),
+                "on_true": (IO.STRING, { "multiline": False, "default": "" }),
+                "on_false": (IO.STRING, { "multiline": False, "default": "" }),
             },
         }
-    
-    RETURN_TYPES = ("INT", "FLOAT", )
+
+    RETURN_TYPES = (IO.INT, IO.FLOAT, )
     FUNCTION = "execute"
     CATEGORY = "essentials/utilities"
 
     def execute(self, evaluate, on_true, on_false, a = 0.0, b = 0.0, c = 0.0):
         return SimpleMath().execute(on_true if evaluate else on_false, a, b, c)
 
-class SimpleCondition:
+class SimpleCondition(ComfyNodeABC):
     def __init__(self):
         pass
 
@@ -291,15 +293,15 @@ class SimpleCondition:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "evaluate": (any, {"default": 0}),
-                "on_true": (any, {"default": 0}),
+                "evaluate": (IO.ANY, {"default": 0}),
+                "on_true": (IO.ANY, {"default": 0}),
             },
             "optional": {
-                "on_false": (any, {"default": None}),
+                "on_false": (IO.ANY, {"default": None}),
             },
         }
 
-    RETURN_TYPES = (any,)
+    RETURN_TYPES = (IO.ANY,)
     RETURN_NAMES = ("result",)
     FUNCTION = "execute"
 
@@ -312,7 +314,7 @@ class SimpleCondition:
 
         return (on_true,)
 
-class SimpleComparison:
+class SimpleComparison(ComfyNodeABC):
     def __init__(self):
         pass
 
@@ -320,13 +322,13 @@ class SimpleComparison:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "a": (any, {"default": 0}),
-                "b": (any, {"default": 0}),
+                "a": (IO.ANY, {"default": 0}),
+                "b": (IO.ANY, {"default": 0}),
                 "comparison": (["==", "!=", "<", "<=", ">", ">="],),
             },
         }
 
-    RETURN_TYPES = ("BOOLEAN",)
+    RETURN_TYPES = (IO.BOOLEAN,)
     FUNCTION = "execute"
 
     CATEGORY = "essentials/utilities"
@@ -345,15 +347,15 @@ class SimpleComparison:
         elif comparison == ">=":
             return (a >= b,)
 
-class ConsoleDebug:
+class ConsoleDebug(ComfyNodeABC):
     @classmethod
     def INPUT_TYPES(s):
         return {
             "required": {
-                "value": (any, {}),
+                "value": (IO.ANY, {}),
             },
             "optional": {
-                "prefix": ("STRING", { "multiline": False, "default": "Value:" })
+                "prefix": (IO.STRING, { "multiline": False, "default": "Value:" })
             }
         }
 
@@ -367,12 +369,12 @@ class ConsoleDebug:
 
         return (None,)
 
-class DebugTensorShape:
+class DebugTensorShape(ComfyNodeABC):
     @classmethod
     def INPUT_TYPES(s):
         return {
             "required": {
-                "tensor": (any, {}),
+                "tensor": (IO.ANY, {}),
             },
         }
 
@@ -399,16 +401,16 @@ class DebugTensorShape:
 
         return (None,)
 
-class BatchCount:
+class BatchCount(ComfyNodeABC):
     @classmethod
     def INPUT_TYPES(s):
         return {
             "required": {
-                "batch": (any, {}),
+                "batch": (IO.ANY, {}),
             },
         }
 
-    RETURN_TYPES = ("INT",)
+    RETURN_TYPES = (IO.INT,)
     FUNCTION = "execute"
     CATEGORY = "essentials/utilities"
 
@@ -423,19 +425,19 @@ class BatchCount:
 
         return (count, )
 
-class ModelCompile():
+class ModelCompile(ComfyNodeABC):
     @classmethod
     def INPUT_TYPES(s):
         return {
             "required": {
-                "model": ("MODEL",),
-                "fullgraph": ("BOOLEAN", { "default": False }),
-                "dynamic": ("BOOLEAN", { "default": False }),
+                "model": (IO.MODEL,),
+                "fullgraph": (IO.BOOLEAN, { "default": False }),
+                "dynamic": (IO.BOOLEAN, { "default": False }),
                 "mode": (["default", "reduce-overhead", "max-autotune", "max-autotune-no-cudagraphs"],),
             },
         }
 
-    RETURN_TYPES = ("MODEL", )
+    RETURN_TYPES = (IO.MODEL, )
     FUNCTION = "execute"
     CATEGORY = "essentials/utilities"
 
@@ -445,11 +447,11 @@ class ModelCompile():
         work_model.add_object_patch("diffusion_model", torch.compile(model=work_model.get_model_object("diffusion_model"), dynamic=dynamic, fullgraph=fullgraph, mode=mode))
         return (work_model, )
 
-class RemoveLatentMask:
+class RemoveLatentMask(ComfyNodeABC):
     @classmethod
     def INPUT_TYPES(s):
-        return {"required": { "samples": ("LATENT",),}}
-    RETURN_TYPES = ("LATENT",)
+        return {"required": { "samples": (IO.LATENT,),}}
+    RETURN_TYPES = (IO.LATENT,)
     FUNCTION = "execute"
 
     CATEGORY = "essentials/utilities"
@@ -461,7 +463,7 @@ class RemoveLatentMask:
 
         return (s,)
 
-class SDXLEmptyLatentSizePicker:
+class SDXLEmptyLatentSizePicker(ComfyNodeABC):
     def __init__(self):
         self.device = comfy.model_management.intermediate_device()
 
@@ -469,13 +471,13 @@ class SDXLEmptyLatentSizePicker:
     def INPUT_TYPES(s):
         return {"required": {
             "resolution": (["704x1408 (0.5)","704x1344 (0.52)","768x1344 (0.57)","768x1280 (0.6)","832x1216 (0.68)","832x1152 (0.72)","896x1152 (0.78)","896x1088 (0.82)","960x1088 (0.88)","960x1024 (0.94)","1024x1024 (1.0)","1024x960 (1.07)","1088x960 (1.13)","1088x896 (1.21)","1152x896 (1.29)","1152x832 (1.38)","1216x832 (1.46)","1280x768 (1.67)","1344x768 (1.75)","1344x704 (1.91)","1408x704 (2.0)","1472x704 (2.09)","1536x640 (2.4)","1600x640 (2.5)","1664x576 (2.89)","1728x576 (3.0)",], {"default": "1024x1024 (1.0)"}),
-            "batch_size": ("INT", {"default": 1, "min": 1, "max": 4096}),
-            "width_override": ("INT", {"default": 0, "min": 0, "max": MAX_RESOLUTION, "step": 8}),
-            "height_override": ("INT", {"default": 0, "min": 0, "max": MAX_RESOLUTION, "step": 8}),
+            "batch_size": (IO.INT, {"default": 1, "min": 1, "max": 4096}),
+            "width_override": (IO.INT, {"default": 0, "min": 0, "max": MAX_RESOLUTION, "step": 8}),
+            "height_override": (IO.INT, {"default": 0, "min": 0, "max": MAX_RESOLUTION, "step": 8}),
             }}
 
-    RETURN_TYPES = ("LATENT","INT","INT",)
-    RETURN_NAMES = ("LATENT","width","height",)
+    RETURN_TYPES = (IO.LATENT,IO.INT,IO.INT,)
+    RETURN_NAMES = (IO.LATENT,"width","height",)
     FUNCTION = "execute"
     CATEGORY = "essentials/utilities"
 
@@ -488,7 +490,7 @@ class SDXLEmptyLatentSizePicker:
 
         return ({"samples":latent}, width, height,)
 
-class DisplayAny:
+class DisplayAny(ComfyNodeABC):
     def __init__(self):
         pass
 
@@ -496,7 +498,7 @@ class DisplayAny:
     def INPUT_TYPES(s):
         return {
             "required": {
-                "input": (("*",{})),
+                "input": ((IO.ANY,{})),
                 "mode": (["raw value", "tensor shape"],),
             },
         }
@@ -505,7 +507,7 @@ class DisplayAny:
     def VALIDATE_INPUTS(s, input_types):
         return True
 
-    RETURN_TYPES = ("STRING",)
+    RETURN_TYPES = (IO.STRING,)
     FUNCTION = "execute"
     OUTPUT_NODE = True
 

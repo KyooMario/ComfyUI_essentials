@@ -1,17 +1,20 @@
-from nodes import MAX_RESOLUTION, ConditioningZeroOut, ConditioningSetTimestepRange, ConditioningCombine
 import re
 
-class CLIPTextEncodeSDXLSimplified:
+from nodes import MAX_RESOLUTION, ConditioningZeroOut, ConditioningSetTimestepRange, ConditioningCombine
+from comfy.comfy_types import IO, ComfyNodeABC, CheckLazyMixin
+
+
+class CLIPTextEncodeSDXLSimplified(ComfyNodeABC):
     @classmethod
     def INPUT_TYPES(s):
         return {"required": {
-            "width": ("INT", {"default": 1024.0, "min": 0, "max": MAX_RESOLUTION}),
-            "height": ("INT", {"default": 1024.0, "min": 0, "max": MAX_RESOLUTION}),
-            "size_cond_factor": ("INT", {"default": 4, "min": 1, "max": 16 }),
-            "text": ("STRING", {"multiline": True, "dynamicPrompts": True, "default": ""}),
-            "clip": ("CLIP", ),
+            "width": (IO.INT, {"default": 1024.0, "min": 0, "max": MAX_RESOLUTION}),
+            "height": (IO.INT, {"default": 1024.0, "min": 0, "max": MAX_RESOLUTION}),
+            "size_cond_factor": (IO.INT, {"default": 4, "min": 1, "max": 16 }),
+            "text": (IO.STRING, {"multiline": True, "dynamicPrompts": True, "default": ""}),
+            "clip": (IO.CLIP, ),
             }}
-    RETURN_TYPES = ("CONDITIONING",)
+    RETURN_TYPES = (IO.CONDITIONING,)
     FUNCTION = "execute"
     CATEGORY = "essentials/conditioning"
 
@@ -35,20 +38,20 @@ class CLIPTextEncodeSDXLSimplified:
         cond, pooled = clip.encode_from_tokens(tokens, return_pooled=True)
         return ([[cond, {"pooled_output": pooled, "width": width, "height": height, "crop_w": crop_w, "crop_h": crop_h, "target_width": target_width, "target_height": target_height}]], )
 
-class ConditioningCombineMultiple:
+class ConditioningCombineMultiple(ComfyNodeABC):
     @classmethod
     def INPUT_TYPES(s):
         return {
             "required": {
-                "conditioning_1": ("CONDITIONING",),
-                "conditioning_2": ("CONDITIONING",),
+                "conditioning_1": (IO.CONDITIONING,),
+                "conditioning_2": (IO.CONDITIONING,),
             }, "optional": {
-                "conditioning_3": ("CONDITIONING",),
-                "conditioning_4": ("CONDITIONING",),
-                "conditioning_5": ("CONDITIONING",),
+                "conditioning_3": (IO.CONDITIONING,),
+                "conditioning_4": (IO.CONDITIONING,),
+                "conditioning_5": (IO.CONDITIONING,),
             },
         }
-    RETURN_TYPES = ("CONDITIONING",)
+    RETURN_TYPES = (IO.CONDITIONING,)
     FUNCTION = "execute"
     CATEGORY = "essentials/conditioning"
 
@@ -64,14 +67,14 @@ class ConditioningCombineMultiple:
 
         return (c,)
 
-class SD3NegativeConditioning:
+class SD3NegativeConditioning(ComfyNodeABC):
     @classmethod
     def INPUT_TYPES(s):
         return {"required": {
-            "conditioning": ("CONDITIONING",),
-            "end": ("FLOAT", {"default": 0.1, "min": 0.0, "max": 1.0, "step": 0.001 }),
+            "conditioning": (IO.CONDITIONING,),
+            "end": (IO.FLOAT, {"default": 0.1, "min": 0.0, "max": 1.0, "step": 0.001 }),
         }}
-    RETURN_TYPES = ("CONDITIONING",)
+    RETURN_TYPES = (IO.CONDITIONING,)
     FUNCTION = "execute"
     CATEGORY = "essentials/conditioning"
 
@@ -87,20 +90,20 @@ class SD3NegativeConditioning:
 
         return (c, )
 
-class FluxAttentionSeeker:
+class FluxAttentionSeeker(ComfyNodeABC):
     @classmethod
     def INPUT_TYPES(s):
         return {"required": {
-            "clip": ("CLIP",),
-            "apply_to_query": ("BOOLEAN", { "default": True }),
-            "apply_to_key": ("BOOLEAN", { "default": True }),
-            "apply_to_value": ("BOOLEAN", { "default": True }),
-            "apply_to_out": ("BOOLEAN", { "default": True }),
-            **{f"clip_l_{s}": ("FLOAT", { "display": "slider", "default": 1.0, "min": 0, "max": 5, "step": 0.05 }) for s in range(12)},
-            **{f"t5xxl_{s}": ("FLOAT", { "display": "slider", "default": 1.0, "min": 0, "max": 5, "step": 0.05 }) for s in range(24)},
+            "clip": (IO.CLIP,),
+            "apply_to_query": (IO.BOOLEAN, { "default": True }),
+            "apply_to_key": (IO.BOOLEAN, { "default": True }),
+            "apply_to_value": (IO.BOOLEAN, { "default": True }),
+            "apply_to_out": (IO.BOOLEAN, { "default": True }),
+            **{f"clip_l_{s}": (IO.FLOAT, { "display": "slider", "default": 1.0, "min": 0, "max": 5, "step": 0.05 }) for s in range(12)},
+            **{f"t5xxl_{s}": (IO.FLOAT, { "display": "slider", "default": 1.0, "min": 0, "max": 5, "step": 0.05 }) for s in range(24)},
         }}
 
-    RETURN_TYPES = ("CLIP",)
+    RETURN_TYPES = (IO.CLIP,)
     FUNCTION = "execute"
 
     CATEGORY = "essentials/conditioning"
@@ -111,7 +114,7 @@ class FluxAttentionSeeker:
 
         m = clip.clone()
         sd = m.patcher.model_state_dict()
-        
+
         for k in sd:
             if "self_attn" in k:
                 layer = re.search(r"\.layers\.(\d+)\.", k)
@@ -130,20 +133,20 @@ class FluxAttentionSeeker:
 
         return (m, )
 
-class SD3AttentionSeekerLG:
+class SD3AttentionSeekerLG(ComfyNodeABC):
     @classmethod
     def INPUT_TYPES(s):
         return {"required": {
-            "clip": ("CLIP",),
-            "apply_to_query": ("BOOLEAN", { "default": True }),
-            "apply_to_key": ("BOOLEAN", { "default": True }),
-            "apply_to_value": ("BOOLEAN", { "default": True }),
-            "apply_to_out": ("BOOLEAN", { "default": True }),
-            **{f"clip_l_{s}": ("FLOAT", { "display": "slider", "default": 1.0, "min": 0, "max": 5, "step": 0.05 }) for s in range(12)},
-            **{f"clip_g_{s}": ("FLOAT", { "display": "slider", "default": 1.0, "min": 0, "max": 5, "step": 0.05 }) for s in range(32)},
+            "clip": (IO.CLIP,),
+            "apply_to_query": (IO.BOOLEAN, { "default": True }),
+            "apply_to_key": (IO.BOOLEAN, { "default": True }),
+            "apply_to_value": (IO.BOOLEAN, { "default": True }),
+            "apply_to_out": (IO.BOOLEAN, { "default": True }),
+            **{f"clip_l_{s}": (IO.FLOAT, { "display": "slider", "default": 1.0, "min": 0, "max": 5, "step": 0.05 }) for s in range(12)},
+            **{f"clip_g_{s}": (IO.FLOAT, { "display": "slider", "default": 1.0, "min": 0, "max": 5, "step": 0.05 }) for s in range(32)},
         }}
 
-    RETURN_TYPES = ("CLIP",)
+    RETURN_TYPES = (IO.CLIP,)
     FUNCTION = "execute"
 
     CATEGORY = "essentials/conditioning"
@@ -154,7 +157,7 @@ class SD3AttentionSeekerLG:
 
         m = clip.clone()
         sd = m.patcher.model_state_dict()
-        
+
         for k in sd:
             if "self_attn" in k:
                 layer = re.search(r"\.layers\.(\d+)\.", k)
@@ -170,19 +173,19 @@ class SD3AttentionSeekerLG:
 
         return (m, )
 
-class SD3AttentionSeekerT5:
+class SD3AttentionSeekerT5(ComfyNodeABC):
     @classmethod
     def INPUT_TYPES(s):
         return {"required": {
-            "clip": ("CLIP",),
-            "apply_to_query": ("BOOLEAN", { "default": True }),
-            "apply_to_key": ("BOOLEAN", { "default": True }),
-            "apply_to_value": ("BOOLEAN", { "default": True }),
-            "apply_to_out": ("BOOLEAN", { "default": True }),
-            **{f"t5xxl_{s}": ("FLOAT", { "display": "slider", "default": 1.0, "min": 0, "max": 5, "step": 0.05 }) for s in range(24)},
+            "clip": (IO.CLIP,),
+            "apply_to_query": (IO.BOOLEAN, { "default": True }),
+            "apply_to_key": (IO.BOOLEAN, { "default": True }),
+            "apply_to_value": (IO.BOOLEAN, { "default": True }),
+            "apply_to_out": (IO.BOOLEAN, { "default": True }),
+            **{f"t5xxl_{s}": (IO.FLOAT, { "display": "slider", "default": 1.0, "min": 0, "max": 5, "step": 0.05 }) for s in range(24)},
         }}
 
-    RETURN_TYPES = ("CLIP",)
+    RETURN_TYPES = (IO.CLIP,)
     FUNCTION = "execute"
 
     CATEGORY = "essentials/conditioning"
@@ -193,7 +196,7 @@ class SD3AttentionSeekerT5:
 
         m = clip.clone()
         sd = m.patcher.model_state_dict()
-        
+
         for k in sd:
             if "SelfAttention" in k:
                 block = re.search(r"\.block\.(\d+)\.", k)
@@ -205,16 +208,16 @@ class SD3AttentionSeekerT5:
 
         return (m, )
 
-class FluxBlocksBuster:
+class FluxBlocksBuster(ComfyNodeABC):
     @classmethod
     def INPUT_TYPES(s):
         return {"required": {
-            "model": ("MODEL",),
-            "blocks": ("STRING", {"default": "## 0 = 1.0\n## 1 = 1.0\n## 2 = 1.0\n## 3 = 1.0\n## 4 = 1.0\n## 5 = 1.0\n## 6 = 1.0\n## 7 = 1.0\n## 8 = 1.0\n## 9 = 1.0\n## 10 = 1.0\n## 11 = 1.0\n## 12 = 1.0\n## 13 = 1.0\n## 14 = 1.0\n## 15 = 1.0\n## 16 = 1.0\n## 17 = 1.0\n## 18 = 1.0\n# 0 = 1.0\n# 1 = 1.0\n# 2 = 1.0\n# 3 = 1.0\n# 4 = 1.0\n# 5 = 1.0\n# 6 = 1.0\n# 7 = 1.0\n# 8 = 1.0\n# 9 = 1.0\n# 10 = 1.0\n# 11 = 1.0\n# 12 = 1.0\n# 13 = 1.0\n# 14 = 1.0\n# 15 = 1.0\n# 16 = 1.0\n# 17 = 1.0\n# 18 = 1.0\n# 19 = 1.0\n# 20 = 1.0\n# 21 = 1.0\n# 22 = 1.0\n# 23 = 1.0\n# 24 = 1.0\n# 25 = 1.0\n# 26 = 1.0\n# 27 = 1.0\n# 28 = 1.0\n# 29 = 1.0\n# 30 = 1.0\n# 31 = 1.0\n# 32 = 1.0\n# 33 = 1.0\n# 34 = 1.0\n# 35 = 1.0\n# 36 = 1.0\n# 37 = 1.0", "multiline": True, "dynamicPrompts": True}),
-            #**{f"double_block_{s}": ("FLOAT", { "display": "slider", "default": 1.0, "min": 0, "max": 5, "step": 0.05 }) for s in range(19)},
-            #**{f"single_block_{s}": ("FLOAT", { "display": "slider", "default": 1.0, "min": 0, "max": 5, "step": 0.05 }) for s in range(38)},
+            "model": (IO.MODEL,),
+            "blocks": (IO.STRING, {"default": "## 0 = 1.0\n## 1 = 1.0\n## 2 = 1.0\n## 3 = 1.0\n## 4 = 1.0\n## 5 = 1.0\n## 6 = 1.0\n## 7 = 1.0\n## 8 = 1.0\n## 9 = 1.0\n## 10 = 1.0\n## 11 = 1.0\n## 12 = 1.0\n## 13 = 1.0\n## 14 = 1.0\n## 15 = 1.0\n## 16 = 1.0\n## 17 = 1.0\n## 18 = 1.0\n# 0 = 1.0\n# 1 = 1.0\n# 2 = 1.0\n# 3 = 1.0\n# 4 = 1.0\n# 5 = 1.0\n# 6 = 1.0\n# 7 = 1.0\n# 8 = 1.0\n# 9 = 1.0\n# 10 = 1.0\n# 11 = 1.0\n# 12 = 1.0\n# 13 = 1.0\n# 14 = 1.0\n# 15 = 1.0\n# 16 = 1.0\n# 17 = 1.0\n# 18 = 1.0\n# 19 = 1.0\n# 20 = 1.0\n# 21 = 1.0\n# 22 = 1.0\n# 23 = 1.0\n# 24 = 1.0\n# 25 = 1.0\n# 26 = 1.0\n# 27 = 1.0\n# 28 = 1.0\n# 29 = 1.0\n# 30 = 1.0\n# 31 = 1.0\n# 32 = 1.0\n# 33 = 1.0\n# 34 = 1.0\n# 35 = 1.0\n# 36 = 1.0\n# 37 = 1.0", "multiline": True, "dynamicPrompts": True}),
+            #**{f"double_block_{s}": (IO.FLOAT, { "display": "slider", "default": 1.0, "min": 0, "max": 5, "step": 0.05 }) for s in range(19)},
+            #**{f"single_block_{s}": (IO.FLOAT, { "display": "slider", "default": 1.0, "min": 0, "max": 5, "step": 0.05 }) for s in range(38)},
         }}
-    RETURN_TYPES = ("MODEL", "STRING")
+    RETURN_TYPES = (IO.MODEL, IO.STRING)
     RETURN_NAMES = ("MODEL", "patched_blocks")
     FUNCTION = "patch"
 

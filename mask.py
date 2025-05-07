@@ -1,31 +1,31 @@
-from nodes import SaveImage
+import random
+import math
+
 import torch
 import torchvision.transforms.v2 as T
-import random
-import folder_paths
-import comfy.utils
-from .image import ImageExpandBatch
-from .utils import AnyType
 import numpy as np
 import scipy
 from PIL import Image
+
+from nodes import SaveImage
+import folder_paths
+import comfy.utils
+from .image import ImageExpandBatch
 from nodes import MAX_RESOLUTION
-import math
+from comfy.comfy_types import IO, ComfyNodeABC, CheckLazyMixin
 
-any = AnyType("*")
-
-class MaskBlur:
+class MaskBlur(ComfyNodeABC):
     @classmethod
     def INPUT_TYPES(s):
         return {
             "required": {
-                "mask": ("MASK",),
-                "amount": ("INT", { "default": 6, "min": 0, "max": 256, "step": 1, }),
+                "mask": (IO.MASK,),
+                "amount": (IO.INT, { "default": 6, "min": 0, "max": 256, "step": 1, }),
                 "device": (["auto", "cpu", "gpu"],),
             }
         }
 
-    RETURN_TYPES = ("MASK",)
+    RETURN_TYPES = (IO.MASK,)
     FUNCTION = "execute"
     CATEGORY = "essentials/mask"
 
@@ -51,17 +51,17 @@ class MaskBlur:
 
         return(mask,)
 
-class MaskFlip:
+class MaskFlip(ComfyNodeABC):
     @classmethod
     def INPUT_TYPES(s):
         return {
             "required": {
-                "mask": ("MASK",),
+                "mask": (IO.MASK,),
                 "axis": (["x", "y", "xy"],),
             }
         }
 
-    RETURN_TYPES = ("MASK",)
+    RETURN_TYPES = (IO.MASK,)
     FUNCTION = "execute"
     CATEGORY = "essentials/mask"
 
@@ -78,7 +78,7 @@ class MaskFlip:
 
         return(mask,)
 
-class MaskPreview(SaveImage):
+class MaskPreview(SaveImage, ComfyNodeABC):
     def __init__(self):
         self.output_dir = folder_paths.get_temp_directory()
         self.type = "temp"
@@ -88,7 +88,7 @@ class MaskPreview(SaveImage):
     @classmethod
     def INPUT_TYPES(s):
         return {
-            "required": {"mask": ("MASK",), },
+            "required": {"mask": (IO.MASK,), },
             "hidden": {"prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"},
         }
 
@@ -99,17 +99,17 @@ class MaskPreview(SaveImage):
         preview = mask.reshape((-1, 1, mask.shape[-2], mask.shape[-1])).movedim(1, -1).expand(-1, -1, -1, 3)
         return self.save_images(preview, filename_prefix, prompt, extra_pnginfo)
 
-class MaskBatch:
+class MaskBatch(ComfyNodeABC):
     @classmethod
     def INPUT_TYPES(s):
         return {
             "required": {
-                "mask1": ("MASK",),
-                "mask2": ("MASK",),
+                "mask1": (IO.MASK,),
+                "mask2": (IO.MASK,),
             }
         }
 
-    RETURN_TYPES = ("MASK",)
+    RETURN_TYPES = (IO.MASK,)
     FUNCTION = "execute"
     CATEGORY = "essentials/mask batch"
 
@@ -119,18 +119,18 @@ class MaskBatch:
 
         return (torch.cat((mask1, mask2), dim=0),)
 
-class MaskExpandBatch:
+class MaskExpandBatch(ComfyNodeABC):
     @classmethod
     def INPUT_TYPES(s):
         return {
             "required": {
-                "mask": ("MASK",),
-                "size": ("INT", { "default": 16, "min": 1, "step": 1, }),
+                "mask": (IO.MASK,),
+                "size": (IO.INT, { "default": 16, "min": 1, "step": 1, }),
                 "method": (["expand", "repeat all", "repeat first", "repeat last"],)
             }
         }
 
-    RETURN_TYPES = ("MASK",)
+    RETURN_TYPES = (IO.MASK,)
     FUNCTION = "execute"
     CATEGORY = "essentials/mask batch"
 
@@ -138,21 +138,21 @@ class MaskExpandBatch:
         return (ImageExpandBatch().execute(mask.unsqueeze(1).expand(-1,3,-1,-1), size, method)[0][:,0,:,:],)
 
 
-class MaskBoundingBox:
+class MaskBoundingBox(ComfyNodeABC):
     @classmethod
     def INPUT_TYPES(s):
         return {
             "required": {
-                "mask": ("MASK",),
-                "padding": ("INT", { "default": 0, "min": 0, "max": 4096, "step": 1, }),
-                "blur": ("INT", { "default": 0, "min": 0, "max": 256, "step": 1, }),
+                "mask": (IO.MASK,),
+                "padding": (IO.INT, { "default": 0, "min": 0, "max": 4096, "step": 1, }),
+                "blur": (IO.INT, { "default": 0, "min": 0, "max": 256, "step": 1, }),
             },
             "optional": {
-                "image_optional": ("IMAGE",),
+                "image_optional": (IO.IMAGE,),
             }
         }
 
-    RETURN_TYPES = ("MASK", "IMAGE", "INT", "INT", "INT", "INT")
+    RETURN_TYPES = (IO.MASK, IO.IMAGE, IO.INT, IO.INT, IO.INT, IO.INT)
     RETURN_NAMES = ("MASK", "IMAGE", "x", "y", "width", "height")
     FUNCTION = "execute"
     CATEGORY = "essentials/mask"
@@ -193,20 +193,20 @@ class MaskBoundingBox:
         return (mask, image_optional, x1, y1, x2 - x1, y2 - y1)
 
 
-class MaskFromColor:
+class MaskFromColor(ComfyNodeABC):
     @classmethod
     def INPUT_TYPES(s):
         return {
             "required": {
-                "image": ("IMAGE", ),
-                "red": ("INT", { "default": 255, "min": 0, "max": 255, "step": 1, }),
-                "green": ("INT", { "default": 255, "min": 0, "max": 255, "step": 1, }),
-                "blue": ("INT", { "default": 255, "min": 0, "max": 255, "step": 1, }),
-                "threshold": ("INT", { "default": 0, "min": 0, "max": 127, "step": 1, }),
+                "image": (IO.IMAGE, ),
+                "red": (IO.INT, { "default": 255, "min": 0, "max": 255, "step": 1, }),
+                "green": (IO.INT, { "default": 255, "min": 0, "max": 255, "step": 1, }),
+                "blue": (IO.INT, { "default": 255, "min": 0, "max": 255, "step": 1, }),
+                "threshold": (IO.INT, { "default": 0, "min": 0, "max": 127, "step": 1, }),
             }
         }
 
-    RETURN_TYPES = ("MASK",)
+    RETURN_TYPES = (IO.MASK,)
     FUNCTION = "execute"
     CATEGORY = "essentials/mask"
 
@@ -224,20 +224,20 @@ class MaskFromColor:
         return (mask, )
 
 
-class MaskFromSegmentation:
+class MaskFromSegmentation(ComfyNodeABC):
     @classmethod
     def INPUT_TYPES(s):
         return {
             "required": {
-                "image": ("IMAGE", ),
-                "segments": ("INT", { "default": 6, "min": 1, "max": 16, "step": 1, }),
-                "remove_isolated_pixels": ("INT", { "default": 0, "min": 0, "max": 32, "step": 1, }),
-                "remove_small_masks": ("FLOAT", { "default": 0.0, "min": 0., "max": 1., "step": 0.01, }),
-                "fill_holes": ("BOOLEAN", { "default": False }),
+                "image": (IO.IMAGE, ),
+                "segments": (IO.INT, { "default": 6, "min": 1, "max": 16, "step": 1, }),
+                "remove_isolated_pixels": (IO.INT, { "default": 0, "min": 0, "max": 32, "step": 1, }),
+                "remove_small_masks": (IO.FLOAT, { "default": 0.0, "min": 0., "max": 1., "step": 0.01, }),
+                "fill_holes": (IO.BOOLEAN, { "default": False }),
             }
         }
 
-    RETURN_TYPES = ("MASK",)
+    RETURN_TYPES = (IO.MASK,)
     FUNCTION = "execute"
     CATEGORY = "essentials/mask"
 
@@ -273,21 +273,21 @@ class MaskFromSegmentation:
         return (mask, )
 
 
-class MaskFix:
+class MaskFix(ComfyNodeABC):
     @classmethod
     def INPUT_TYPES(s):
         return {
             "required": {
-                "mask": ("MASK",),
-                "erode_dilate": ("INT", { "default": 0, "min": -256, "max": 256, "step": 1, }),
-                "fill_holes": ("INT", { "default": 0, "min": 0, "max": 128, "step": 1, }),
-                "remove_isolated_pixels": ("INT", { "default": 0, "min": 0, "max": 32, "step": 1, }),
-                "smooth": ("INT", { "default": 0, "min": 0, "max": 256, "step": 1, }),
-                "blur": ("INT", { "default": 0, "min": 0, "max": 256, "step": 1, }),
+                "mask": (IO.MASK,),
+                "erode_dilate": (IO.INT, { "default": 0, "min": -256, "max": 256, "step": 1, }),
+                "fill_holes": (IO.INT, { "default": 0, "min": 0, "max": 128, "step": 1, }),
+                "remove_isolated_pixels": (IO.INT, { "default": 0, "min": 0, "max": 32, "step": 1, }),
+                "smooth": (IO.INT, { "default": 0, "min": 0, "max": 256, "step": 1, }),
+                "blur": (IO.INT, { "default": 0, "min": 0, "max": 256, "step": 1, }),
             }
         }
 
-    RETURN_TYPES = ("MASK",)
+    RETURN_TYPES = (IO.MASK,)
     FUNCTION = "execute"
     CATEGORY = "essentials/mask"
 
@@ -328,24 +328,24 @@ class MaskFix:
 
         return (masks, )
 
-class MaskSmooth:
+class MaskSmooth(ComfyNodeABC):
     @classmethod
     def INPUT_TYPES(s):
         return {
             "required": {
-                "mask": ("MASK",),
-                "amount": ("INT", { "default": 0, "min": 0, "max": 127, "step": 1, }),
+                "mask": (IO.MASK,),
+                "amount": (IO.INT, { "default": 0, "min": 0, "max": 127, "step": 1, }),
             }
         }
 
-    RETURN_TYPES = ("MASK",)
+    RETURN_TYPES = (IO.MASK,)
     FUNCTION = "execute"
     CATEGORY = "essentials/mask"
 
     def execute(self, mask, amount):
         if amount == 0:
             return (mask,)
-        
+
         if amount % 2 == 0:
             amount += 1
 
@@ -354,18 +354,18 @@ class MaskSmooth:
 
         return (mask,)
 
-class MaskFromBatch:
+class MaskFromBatch(ComfyNodeABC):
     @classmethod
     def INPUT_TYPES(s):
         return {
             "required": {
-                "mask": ("MASK", ),
-                "start": ("INT", { "default": 0, "min": 0, "step": 1, }),
-                "length": ("INT", { "default": 1, "min": 1, "step": 1, }),
+                "mask": (IO.MASK, ),
+                "start": (IO.INT, { "default": 0, "min": 0, "step": 1, }),
+                "length": (IO.INT, { "default": 1, "min": 1, "step": 1, }),
             }
         }
 
-    RETURN_TYPES = ("MASK",)
+    RETURN_TYPES = (IO.MASK,)
     FUNCTION = "execute"
     CATEGORY = "essentials/mask batch"
 
@@ -377,20 +377,20 @@ class MaskFromBatch:
         length = min(mask.shape[0]-start, length)
         return (mask[start:start + length], )
 
-class MaskFromList:
+class MaskFromList(ComfyNodeABC):
     @classmethod
     def INPUT_TYPES(s):
         return {
             "required": {
-                "width": ("INT", { "default": 32, "min": 0, "max": MAX_RESOLUTION, "step": 8, }),
-                "height": ("INT", { "default": 32, "min": 0, "max": MAX_RESOLUTION, "step": 8, }),
+                "width": (IO.INT, { "default": 32, "min": 0, "max": MAX_RESOLUTION, "step": 8, }),
+                "height": (IO.INT, { "default": 32, "min": 0, "max": MAX_RESOLUTION, "step": 8, }),
             }, "optional": {
-                "values": (any, { "default": 0.0, "min": 0.0, "max": 1.0, }),
-                "str_values": ("STRING", { "default": "", "multiline": True, "placeholder": "0.0, 0.5, 1.0",}),
+                "values": (IO.ANY, { "default": 0.0, "min": 0.0, "max": 1.0, }),
+                "str_values": (IO.STRING, { "default": "", "multiline": True, "placeholder": "0.0, 0.5, 1.0",}),
             }
         }
 
-    RETURN_TYPES = ("MASK",)
+    RETURN_TYPES = (IO.MASK,)
     FUNCTION = "execute"
     CATEGORY = "essentials/mask"
 
@@ -409,28 +409,28 @@ class MaskFromList:
 
         if out == []:
             raise ValueError("No values provided")
-        
+
         out = torch.tensor(out).float().clamp(0.0, 1.0)
         out = out.view(-1, 1, 1).expand(-1, height, width)
-        
+
         values = None
         str_values = ""
 
         return (out, )
 
-class MaskFromRGBCMYBW:
+class MaskFromRGBCMYBW(ComfyNodeABC):
     @classmethod
     def INPUT_TYPES(s):
         return {
             "required": {
-                "image": ("IMAGE", ),
-                "threshold_r": ("FLOAT", { "default": 0.15, "min": 0.0, "max": 1, "step": 0.01, }),
-                "threshold_g": ("FLOAT", { "default": 0.15, "min": 0.0, "max": 1, "step": 0.01, }),
-                "threshold_b": ("FLOAT", { "default": 0.15, "min": 0.0, "max": 1, "step": 0.01, }),
+                "image": (IO.IMAGE, ),
+                "threshold_r": (IO.FLOAT, { "default": 0.15, "min": 0.0, "max": 1, "step": 0.01, }),
+                "threshold_g": (IO.FLOAT, { "default": 0.15, "min": 0.0, "max": 1, "step": 0.01, }),
+                "threshold_b": (IO.FLOAT, { "default": 0.15, "min": 0.0, "max": 1, "step": 0.01, }),
             }
         }
 
-    RETURN_TYPES = ("MASK","MASK","MASK","MASK","MASK","MASK","MASK","MASK",)
+    RETURN_TYPES = (IO.MASK,IO.MASK,IO.MASK,IO.MASK,IO.MASK,IO.MASK,IO.MASK,IO.MASK,)
     RETURN_NAMES = ("red","green","blue","cyan","magenta","yellow","black","white",)
     FUNCTION = "execute"
     CATEGORY = "essentials/mask"
@@ -446,25 +446,25 @@ class MaskFromRGBCMYBW:
 
         black = ((image[..., 0] <= threshold_r) & (image[..., 1] <= threshold_g) & (image[..., 2] <= threshold_b)).float()
         white = ((image[..., 0] >= 1-threshold_r) & (image[..., 1] >= 1-threshold_g) & (image[..., 2] >= 1-threshold_b)).float()
-        
+
         return (red, green, blue, cyan, magenta, yellow, black, white,)
 
-class TransitionMask:
+class TransitionMask(ComfyNodeABC):
     @classmethod
     def INPUT_TYPES(s):
         return {
             "required": {
-                "width": ("INT", { "default": 512, "min": 1, "max": MAX_RESOLUTION, "step": 1, }),
-                "height": ("INT", { "default": 512, "min": 1, "max": MAX_RESOLUTION, "step": 1, }),
-                "frames": ("INT", { "default": 16, "min": 1, "max": 9999, "step": 1, }),
-                "start_frame": ("INT", { "default": 0, "min": 0, "step": 1, }),
-                "end_frame": ("INT", { "default": 9999, "min": 0, "step": 1, }),
+                "width": (IO.INT, { "default": 512, "min": 1, "max": MAX_RESOLUTION, "step": 1, }),
+                "height": (IO.INT, { "default": 512, "min": 1, "max": MAX_RESOLUTION, "step": 1, }),
+                "frames": (IO.INT, { "default": 16, "min": 1, "max": 9999, "step": 1, }),
+                "start_frame": (IO.INT, { "default": 0, "min": 0, "step": 1, }),
+                "end_frame": (IO.INT, { "default": 9999, "min": 0, "step": 1, }),
                 "transition_type": (["horizontal slide", "vertical slide", "horizontal bar", "vertical bar", "center box", "horizontal door", "vertical door", "circle", "fade"],),
                 "timing_function": (["linear", "in", "out", "in-out"],)
             }
         }
 
-    RETURN_TYPES = ("MASK",)
+    RETURN_TYPES = (IO.MASK,)
     FUNCTION = "execute"
     CATEGORY = "essentials/mask"
 

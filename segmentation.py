@@ -1,9 +1,13 @@
 import torch
 import torchvision.transforms.v2 as T
 import torch.nn.functional as F
+
+from comfy.comfy_types import IO, ComfyNodeABC, CheckLazyMixin
+
 from .utils import expand_mask
 
-class LoadCLIPSegModels:
+
+class LoadCLIPSegModels(ComfyNodeABC):
     @classmethod
     def INPUT_TYPES(s):
         return {
@@ -21,22 +25,22 @@ class LoadCLIPSegModels:
 
         return ((processor, model),)
 
-class ApplyCLIPSeg:
+class ApplyCLIPSeg(ComfyNodeABC):
     @classmethod
     def INPUT_TYPES(s):
         return {
             "required": {
                 "clip_seg": ("CLIP_SEG",),
-                "image": ("IMAGE",),
-                "prompt": ("STRING", { "multiline": False, "default": "" }),
-                "threshold": ("FLOAT", { "default": 0.4, "min": 0.0, "max": 1.0, "step": 0.05 }),
-                "smooth": ("INT", { "default": 9, "min": 0, "max": 32, "step": 1 }),
-                "dilate": ("INT", { "default": 0, "min": -32, "max": 32, "step": 1 }),
-                "blur": ("INT", { "default": 0, "min": 0, "max": 64, "step": 1 }),
+                "image": (IO.IMAGE,),
+                "prompt": (IO.STRING, { "multiline": False, "default": "" }),
+                "threshold": (IO.FLOAT, { "default": 0.4, "min": 0.0, "max": 1.0, "step": 0.05 }),
+                "smooth": (IO.INT, { "default": 9, "min": 0, "max": 32, "step": 1 }),
+                "dilate": (IO.INT, { "default": 0, "min": -32, "max": 32, "step": 1 }),
+                "blur": (IO.INT, { "default": 0, "min": 0, "max": 64, "step": 1 }),
             },
         }
 
-    RETURN_TYPES = ("MASK",)
+    RETURN_TYPES = (IO.MASK,)
     FUNCTION = "execute"
     CATEGORY = "essentials/segmentation"
 
@@ -72,7 +76,7 @@ class ApplyCLIPSeg:
             if blur % 2 == 0:
                 blur += 1
             outputs = T.functional.gaussian_blur(outputs, blur)
-        
+
         # resize to original size
         outputs = F.interpolate(outputs.unsqueeze(1), size=(image.shape[1], image.shape[2]), mode='bicubic').squeeze(1)
 

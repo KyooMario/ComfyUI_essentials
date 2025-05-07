@@ -1,14 +1,21 @@
 import os
-import comfy.samplers
-import comfy.sample
+import logging
+
 import torch
-from nodes import common_ksampler, CLIPTextEncode
-from comfy.utils import ProgressBar
-from .utils import expand_mask, FONTS_DIR, parse_string_to_list
 import torchvision.transforms.v2 as T
 import torch.nn.functional as F
-import logging
+
+import comfy.samplers
+import comfy.sample
+from nodes import common_ksampler, CLIPTextEncode
+from comfy.utils import ProgressBar
 import folder_paths
+from comfy.comfy_types import IO, ComfyNodeABC, CheckLazyMixin
+
+from .utils import expand_mask, FONTS_DIR, parse_string_to_list
+
+
+
 
 # From https://github.com/BlenderNeko/ComfyUI_Noise/
 def slerp(val, low, high):
@@ -29,28 +36,28 @@ def slerp(val, low, high):
 
     return res.reshape(dims)
 
-class KSamplerVariationsWithNoise:
+class KSamplerVariationsWithNoise(ComfyNodeABC):
     @classmethod
     def INPUT_TYPES(s):
         return {"required": {
-                    "model": ("MODEL", ),
-                    "latent_image": ("LATENT", ),
-                    "main_seed": ("INT:seed", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
-                    "steps": ("INT", {"default": 20, "min": 1, "max": 10000}),
-                    "cfg": ("FLOAT", {"default": 8.0, "min": 0.0, "max": 100.0, "step":0.1, "round": 0.01}),
+                    "model": (IO.MODEL, ),
+                    "latent_image": (IO.LATENT, ),
+                    "main_seed": (IO.INT, {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
+                    "steps": (IO.INT, {"default": 20, "min": 1, "max": 10000}),
+                    "cfg": (IO.FLOAT, {"default": 8.0, "min": 0.0, "max": 100.0, "step":0.1, "round": 0.01}),
                     "sampler_name": (comfy.samplers.KSampler.SAMPLERS, ),
                     "scheduler": (comfy.samplers.KSampler.SCHEDULERS, ),
-                    "positive": ("CONDITIONING", ),
-                    "negative": ("CONDITIONING", ),
-                    "variation_strength": ("FLOAT", {"default": 0.17, "min": 0.0, "max": 1.0, "step":0.01, "round": 0.01}),
-                    #"start_at_step": ("INT", {"default": 0, "min": 0, "max": 10000}),
-                    #"end_at_step": ("INT", {"default": 10000, "min": 0, "max": 10000}),
+                    "positive": (IO.CONDITIONING, ),
+                    "negative": (IO.CONDITIONING, ),
+                    "variation_strength": (IO.FLOAT, {"default": 0.17, "min": 0.0, "max": 1.0, "step":0.01, "round": 0.01}),
+                    #"start_at_step": (IO.INT, {"default": 0, "min": 0, "max": 10000}),
+                    #"end_at_step": (IO.INT, {"default": 10000, "min": 0, "max": 10000}),
                     #"return_with_leftover_noise": (["disable", "enable"], ),
-                    "variation_seed": ("INT:seed", {"default": 12345, "min": 0, "max": 0xffffffffffffffff}),
-                    "denoise": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step":0.01, "round": 0.01}),
+                    "variation_seed": (IO.INT, {"default": 12345, "min": 0, "max": 0xffffffffffffffff}),
+                    "denoise": (IO.FLOAT, {"default": 1.0, "min": 0.0, "max": 1.0, "step":0.01, "round": 0.01}),
                 }}
 
-    RETURN_TYPES = ("LATENT",)
+    RETURN_TYPES = (IO.LATENT,)
     FUNCTION = "execute"
     CATEGORY = "essentials/sampling"
 
@@ -104,26 +111,26 @@ class KSamplerVariationsWithNoise:
         return common_ksampler(model, main_seed, steps, cfg, sampler_name, scheduler, positive, negative, work_latent, denoise=1.0, disable_noise=disable_noise, start_step=start_at_step, last_step=end_at_step, force_full_denoise=force_full_denoise)
 
 
-class KSamplerVariationsStochastic:
+class KSamplerVariationsStochastic(ComfyNodeABC):
     @classmethod
     def INPUT_TYPES(s):
         return {"required":{
-                    "model": ("MODEL",),
-                    "latent_image": ("LATENT", ),
-                    "noise_seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
-                    "steps": ("INT", {"default": 25, "min": 1, "max": 10000}),
-                    "cfg": ("FLOAT", {"default": 7.0, "min": 0.0, "max": 100.0, "step":0.1, "round": 0.01}),
+                    "model": (IO.MODEL,),
+                    "latent_image": (IO.LATENT, ),
+                    "noise_seed": (IO.INT, {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
+                    "steps": (IO.INT, {"default": 25, "min": 1, "max": 10000}),
+                    "cfg": (IO.FLOAT, {"default": 7.0, "min": 0.0, "max": 100.0, "step":0.1, "round": 0.01}),
                     "sampler": (comfy.samplers.KSampler.SAMPLERS, ),
                     "scheduler": (comfy.samplers.KSampler.SCHEDULERS, ),
-                    "positive": ("CONDITIONING", ),
-                    "negative": ("CONDITIONING", ),
+                    "positive": (IO.CONDITIONING, ),
+                    "negative": (IO.CONDITIONING, ),
                     "variation_seed": ("INT:seed", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
-                    "variation_strength": ("FLOAT", {"default": 0.2, "min": 0.0, "max": 1.0, "step":0.05, "round": 0.01}),
+                    "variation_strength": (IO.FLOAT, {"default": 0.2, "min": 0.0, "max": 1.0, "step":0.05, "round": 0.01}),
                     #"variation_sampler": (comfy.samplers.KSampler.SAMPLERS, ),
-                    "cfg_scale": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step":0.05, "round": 0.01}),
+                    "cfg_scale": (IO.FLOAT, {"default": 1.0, "min": 0.0, "max": 1.0, "step":0.05, "round": 0.01}),
                 }}
 
-    RETURN_TYPES = ("LATENT", )
+    RETURN_TYPES = (IO.LATENT, )
     FUNCTION = "execute"
     CATEGORY = "essentials/sampling"
 
@@ -153,20 +160,20 @@ class KSamplerVariationsStochastic:
 
         return common_ksampler(model, variation_seed, steps, cfg, variation_sampler, scheduler, positive, negative, stage1, denoise=1.0, disable_noise=disable_noise, start_step=start_at_step, last_step=end_at_step, force_full_denoise=force_full_denoise)
 
-class InjectLatentNoise:
+class InjectLatentNoise(ComfyNodeABC):
     @classmethod
     def INPUT_TYPES(s):
         return {"required": {
-                    "latent": ("LATENT", ),
-                    "noise_seed": ("INT", {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
-                    "noise_strength": ("FLOAT", {"default": 1.0, "min": -20.0, "max": 20.0, "step":0.01, "round": 0.01}),
+                    "latent": (IO.LATENT, ),
+                    "noise_seed": (IO.INT, {"default": 0, "min": 0, "max": 0xffffffffffffffff}),
+                    "noise_strength": (IO.FLOAT, {"default": 1.0, "min": -20.0, "max": 20.0, "step":0.01, "round": 0.01}),
                     "normalize": (["false", "true"], {"default": "false"}),
                 },
                 "optional": {
-                    "mask": ("MASK", ),
+                    "mask": (IO.MASK, ),
                 }}
 
-    RETURN_TYPES = ("LATENT",)
+    RETURN_TYPES = (IO.LATENT,)
     FUNCTION = "execute"
     CATEGORY = "essentials/sampling"
 
@@ -196,16 +203,16 @@ class InjectLatentNoise:
 
         return (noise_latent, )
 
-class TextEncodeForSamplerParams:
+class TextEncodeForSamplerParams(ComfyNodeABC):
     @classmethod
     def INPUT_TYPES(s):
         return {
             "required": {
-                "text": ("STRING", {"multiline": True, "dynamicPrompts": True, "default": "Separate prompts with at least three dashes\n---\nLike so"}),
-                "clip": ("CLIP", )
+                "text": (IO.STRING, {"multiline": True, "dynamicPrompts": True, "default": "Separate prompts with at least three dashes\n---\nLike so"}),
+                "clip": (IO.CLIP, )
             }}
 
-    RETURN_TYPES = ("CONDITIONING", )
+    RETURN_TYPES = (IO.CONDITIONING, )
     FUNCTION = "execute"
     CATEGORY = "essentials/sampling"
 
@@ -229,14 +236,14 @@ class TextEncodeForSamplerParams:
 
         return (output, )
 
-class SamplerSelectHelper:
+class SamplerSelectHelper(ComfyNodeABC):
     @classmethod
     def INPUT_TYPES(s):
         return {"required": {
-            **{s: ("BOOLEAN", { "default": False }) for s in comfy.samplers.KSampler.SAMPLERS},
+            **{s: (IO.BOOLEAN, { "default": False }) for s in comfy.samplers.KSampler.SAMPLERS},
         }}
 
-    RETURN_TYPES = ("STRING", )
+    RETURN_TYPES = (IO.STRING, )
     FUNCTION = "execute"
     CATEGORY = "essentials/sampling"
 
@@ -246,14 +253,14 @@ class SamplerSelectHelper:
 
         return (values, )
 
-class SchedulerSelectHelper:
+class SchedulerSelectHelper(ComfyNodeABC):
     @classmethod
     def INPUT_TYPES(s):
         return {"required": {
-            **{s: ("BOOLEAN", { "default": False }) for s in comfy.samplers.KSampler.SCHEDULERS},
+            **{s: (IO.BOOLEAN, { "default": False }) for s in comfy.samplers.KSampler.SCHEDULERS},
         }}
 
-    RETURN_TYPES = ("STRING", )
+    RETURN_TYPES = (IO.STRING, )
     FUNCTION = "execute"
     CATEGORY = "essentials/sampling"
 
@@ -263,22 +270,22 @@ class SchedulerSelectHelper:
 
         return (values, )
 
-class LorasForFluxParams:
+class LorasForFluxParams(ComfyNodeABC):
     @classmethod
     def INPUT_TYPES(s):
         optional_loras = ['none'] + folder_paths.get_filename_list("loras")
         return {
             "required": {
                 "lora_1": (folder_paths.get_filename_list("loras"), {"tooltip": "The name of the LoRA."}),
-                "strength_model_1": ("STRING", { "multiline": False, "dynamicPrompts": False, "default": "1.0" }),
+                "strength_model_1": (IO.STRING, { "multiline": False, "dynamicPrompts": False, "default": "1.0" }),
             },
             #"optional": {
             #    "lora_2": (optional_loras, ),
-            #    "strength_lora_2": ("STRING", { "multiline": False, "dynamicPrompts": False }),
+            #    "strength_lora_2": (IO.STRING, { "multiline": False, "dynamicPrompts": False }),
             #    "lora_3": (optional_loras, ),
-            #    "strength_lora_3": ("STRING", { "multiline": False, "dynamicPrompts": False }),
+            #    "strength_lora_3": (IO.STRING, { "multiline": False, "dynamicPrompts": False }),
             #    "lora_4": (optional_loras, ),
-            #    "strength_lora_4": ("STRING", { "multiline": False, "dynamicPrompts": False }),
+            #    "strength_lora_4": (IO.STRING, { "multiline": False, "dynamicPrompts": False }),
             #}
         }
 
@@ -310,7 +317,7 @@ class LorasForFluxParams:
         return (output,)
 
 
-class FluxSamplerParams:
+class FluxSamplerParams(ComfyNodeABC):
     def __init__(self):
         self.loraloader = None
         self.lora = (None, None)
@@ -318,24 +325,24 @@ class FluxSamplerParams:
     @classmethod
     def INPUT_TYPES(s):
         return {"required": {
-                    "model": ("MODEL", ),
-                    "conditioning": ("CONDITIONING", ),
-                    "latent_image": ("LATENT", ),
+                    "model": (IO.MODEL, ),
+                    "conditioning": (IO.CONDITIONING, ),
+                    "latent_image": (IO.LATENT, ),
 
-                    "seed": ("STRING", { "multiline": False, "dynamicPrompts": False, "default": "?" }),
-                    "sampler": ("STRING", { "multiline": False, "dynamicPrompts": False, "default": "euler" }),
-                    "scheduler": ("STRING", { "multiline": False, "dynamicPrompts": False, "default": "simple" }),
-                    "steps": ("STRING", { "multiline": False, "dynamicPrompts": False, "default": "20" }),
-                    "guidance": ("STRING", { "multiline": False, "dynamicPrompts": False, "default": "3.5" }),
-                    "max_shift": ("STRING", { "multiline": False, "dynamicPrompts": False, "default": "" }),
-                    "base_shift": ("STRING", { "multiline": False, "dynamicPrompts": False, "default": "" }),
-                    "denoise": ("STRING", { "multiline": False, "dynamicPrompts": False, "default": "1.0" }),
+                    "seed": (IO.STRING, { "multiline": False, "dynamicPrompts": False, "default": "?" }),
+                    "sampler": (IO.STRING, { "multiline": False, "dynamicPrompts": False, "default": "euler" }),
+                    "scheduler": (IO.STRING, { "multiline": False, "dynamicPrompts": False, "default": "simple" }),
+                    "steps": (IO.STRING, { "multiline": False, "dynamicPrompts": False, "default": "20" }),
+                    "guidance": (IO.STRING, { "multiline": False, "dynamicPrompts": False, "default": "3.5" }),
+                    "max_shift": (IO.STRING, { "multiline": False, "dynamicPrompts": False, "default": "" }),
+                    "base_shift": (IO.STRING, { "multiline": False, "dynamicPrompts": False, "default": "" }),
+                    "denoise": (IO.STRING, { "multiline": False, "dynamicPrompts": False, "default": "1.0" }),
                 },
                 "optional": {
                     "loras": ("LORA_PARAMS",),
                 }}
 
-    RETURN_TYPES = ("LATENT","SAMPLER_PARAMS")
+    RETURN_TYPES = (IO.LATENT,"SAMPLER_PARAMS")
     RETURN_NAMES = ("latent", "params")
     FUNCTION = "execute"
     CATEGORY = "essentials/sampling"
@@ -503,20 +510,20 @@ class FluxSamplerParams:
 
         return (out_latent, out_params)
 
-class PlotParameters:
+class PlotParameters(ComfyNodeABC):
     @classmethod
     def INPUT_TYPES(s):
         return {"required": {
-                    "images": ("IMAGE", ),
+                    "images": (IO.IMAGE, ),
                     "params": ("SAMPLER_PARAMS", ),
                     "order_by": (["none", "time", "seed", "steps", "denoise", "sampler", "scheduler", "guidance", "max_shift", "base_shift", "lora_strength"], ),
                     "cols_value": (["none", "time", "seed", "steps", "denoise", "sampler", "scheduler", "guidance", "max_shift", "base_shift", "lora_strength"], ),
-                    "cols_num": ("INT", {"default": -1, "min": -1, "max": 1024 }),
+                    "cols_num": (IO.INT, {"default": -1, "min": -1, "max": 1024 }),
                     "add_prompt": (["false", "true", "excerpt"], ),
                     "add_params": (["false", "true", "changes only"], {"default": "true"}),
                 }}
 
-    RETURN_TYPES = ("IMAGE", )
+    RETURN_TYPES = (IO.IMAGE, )
     FUNCTION = "execute"
     CATEGORY = "essentials/sampling"
 
@@ -670,19 +677,19 @@ class PlotParameters:
 
         return (out_image, )
 
-class GuidanceTimestepping:
+class GuidanceTimestepping(ComfyNodeABC):
     @classmethod
     def INPUT_TYPES(s):
         return {
             "required": {
-                "model": ("MODEL",),
-                "value": ("FLOAT", {"default": 2.0, "min": 0.0, "max": 100.0, "step": 0.05}),
-                "start_at": ("FLOAT", {"default": 0.2, "min": 0.0, "max": 1.0, "step": 0.01}),
-                "end_at": ("FLOAT", {"default": 0.8, "min": 0.0, "max": 1.0, "step": 0.01}),
+                "model": (IO.MODEL,),
+                "value": (IO.FLOAT, {"default": 2.0, "min": 0.0, "max": 100.0, "step": 0.05}),
+                "start_at": (IO.FLOAT, {"default": 0.2, "min": 0.0, "max": 1.0, "step": 0.01}),
+                "end_at": (IO.FLOAT, {"default": 0.8, "min": 0.0, "max": 1.0, "step": 0.01}),
             }
         }
 
-    RETURN_TYPES = ("MODEL",)
+    RETURN_TYPES = (IO.MODEL,)
     FUNCTION = "execute"
     CATEGORY = "essentials/sampling"
 
@@ -702,7 +709,7 @@ class GuidanceTimestepping:
                 cond_scale = value
 
             return uncond + (cond - uncond) * cond_scale
-        
+
         m = model.clone()
         m.set_model_sampler_cfg_function(apply_apg)
         return (m,)
@@ -742,7 +749,7 @@ class ModelSamplingDiscreteFlowCustom(torch.nn.Module):
             t = timestep.cpu().item() / self.multiplier
             if t <= self.cut_off:
                 shift = shift * self.shift_multiplier
-            
+
         return comfy.model_sampling.time_snr_shift(shift, timestep / self.multiplier)
 
     def percent_to_sigma(self, percent):
@@ -752,23 +759,23 @@ class ModelSamplingDiscreteFlowCustom(torch.nn.Module):
             return 0.0
         return 1.0 - percent
 
-class ModelSamplingSD3Advanced:
+class ModelSamplingSD3Advanced(ComfyNodeABC):
     @classmethod
     def INPUT_TYPES(s):
-        return {"required": { "model": ("MODEL",),
-                              "shift": ("FLOAT", {"default": 3.0, "min": 0.0, "max": 100.0, "step":0.01}),
-                              "cut_off": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 1.0, "step":0.05}),
-                              "shift_multiplier": ("FLOAT", {"default": 2, "min": 0, "max": 10, "step":0.05}),
+        return {"required": { "model": (IO.MODEL,),
+                              "shift": (IO.FLOAT, {"default": 3.0, "min": 0.0, "max": 100.0, "step":0.01}),
+                              "cut_off": (IO.FLOAT, {"default": 0.5, "min": 0.0, "max": 1.0, "step":0.05}),
+                              "shift_multiplier": (IO.FLOAT, {"default": 2, "min": 0, "max": 10, "step":0.05}),
                               }}
 
-    RETURN_TYPES = ("MODEL",)
+    RETURN_TYPES = (IO.MODEL,)
     FUNCTION = "execute"
 
     CATEGORY = "essentials/sampling"
 
     def execute(self, model, shift, multiplier=1000, cut_off=1.0, shift_multiplier=0):
         m = model.clone()
-        
+
 
         sampling_base = ModelSamplingDiscreteFlowCustom
         sampling_type = comfy.model_sampling.CONST
