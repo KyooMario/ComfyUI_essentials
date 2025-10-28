@@ -14,7 +14,7 @@ import torchvision.transforms.v2 as T
 #warnings.filterwarnings('ignore', module="torchvision")
 import math
 import os
-import numpy as np
+# import numpy as np   # removed: global NumPy dependency
 import folder_paths
 from pathlib import Path
 import random
@@ -316,6 +316,16 @@ class ImageComposite:
             s = source[i]
             m = mask[i]
 
+            # guard if offsets push negative
+            if x[i] < 0:
+                s = s[:, -x[i]:, :]
+                m = m[:, -x[i]:, :]
+                x[i] = 0
+            if y[i] < 0:
+                s = s[-y[i]:, :, :]
+                m = m[-y[i]:, :, :]
+                y[i] = 0
+
             if x[i]+source.shape[2] > destination.shape[2]:
                 s = s[:, :, :destination.shape[2]-x[i], :]
                 m = m[:, :, :destination.shape[2]-x[i], :]
@@ -323,21 +333,10 @@ class ImageComposite:
                 s = s[:, :destination.shape[1]-y[i], :, :]
                 m = m[:destination.shape[1]-y[i], :, :]
             
-            #output.append(s * m + d[y[i]:y[i]+s.shape[0], x[i]:x[i]+s.shape[1], :] * (1 - m))
             d[y[i]:y[i]+s.shape[0], x[i]:x[i]+s.shape[1], :] = s * m + d[y[i]:y[i]+s.shape[0], x[i]:x[i]+s.shape[1], :] * (1 - m)
             output.append(d)
         
         output = torch.stack(output)
-
-        # apply the source to the destination at XY position using the mask
-        #for i in range(destination.shape[0]):
-        #    output[i, y[i]:y[i]+source.shape[1], x[i]:x[i]+source.shape[2], :] = source * mask + destination[i, y[i]:y[i]+source.shape[1], x[i]:x[i]+source.shape[2], :] * (1 - mask)
-
-        #for x_, y_ in zip(x, y):
-        #    output[:, y_:y_+source.shape[1], x_:x_+source.shape[2], :] = source * mask + destination[:, y_:y_+source.shape[1], x_:x_+source.shape[2], :] * (1 - mask)
-
-        #output[:, y:y+source.shape[1], x:x+source.shape[2], :] = source * mask + destination[:, y:y+source.shape[1], x:x+source.shape[2], :] * (1 - mask)
-        #output = destination * (1 - mask) + source * mask
 
         return (output,)
 
@@ -651,15 +650,9 @@ class ImageUntile:
                 # feather the overlap on top
                 if i > 0 and overlap_y > 0:
                     mask[:, :overlap_y, :] *= torch.linspace(0, 1, overlap_y, device=tiles.device, dtype=tiles.dtype).unsqueeze(1)
-                # feather the overlap on bottom
-                #if i < rows - 1:
-                #    mask[:, -overlap_y:, :] *= torch.linspace(1, 0, overlap_y, device=tiles.device, dtype=tiles.dtype).unsqueeze(1)
                 # feather the overlap on left
                 if j > 0 and overlap_x > 0:
                     mask[:, :, :overlap_x] *= torch.linspace(0, 1, overlap_x, device=tiles.device, dtype=tiles.dtype).unsqueeze(0)
-                # feather the overlap on right
-                #if j < cols - 1:
-                #    mask[:, :, -overlap_x:] *= torch.linspace(1, 0, overlap_x, device=tiles.device, dtype=tiles.dtype).unsqueeze(0)
                 
                 mask = mask.unsqueeze(-1).repeat(1, 1, 1, tiles.shape[3])
                 tile = tiles[i * cols + j] * mask
@@ -693,14 +686,11 @@ class ImageSeamCarving:
         img = image.permute([0, 3, 1, 2])
 
         if keep_mask is not None:
-            #keep_mask = keep_mask.reshape((-1, 1, keep_mask.shape[-2], keep_mask.shape[-1])).movedim(1, -1)
             keep_mask = keep_mask.unsqueeze(1)
-
             if keep_mask.shape[2] != img.shape[2] or keep_mask.shape[3] != img.shape[3]:
                 keep_mask = F.interpolate(keep_mask, size=(img.shape[2], img.shape[3]), mode="bilinear")
         if drop_mask is not None:
             drop_mask = drop_mask.unsqueeze(1)
-
             if drop_mask.shape[2] != img.shape[2] or drop_mask.shape[3] != img.shape[3]:
                 drop_mask = F.interpolate(drop_mask, size=(img.shape[2], img.shape[3]), mode="bilinear")
 
@@ -894,8 +884,6 @@ class PixelOEPixelize:
                 "thickness": ("INT", { "default": 2, "min": 1, "max": 16, "step": 1 }),
                 "color_matching": ("BOOLEAN", { "default": True }),
                 "upscale": ("BOOLEAN", { "default": True }),
-                #"contrast": ("FLOAT", { "default": 1.0, "min": 0.0, "max": 100.0, "step": 0.1 }),
-                #"saturation": ("FLOAT", { "default": 1.0, "min": 0.0, "max": 100.0, "step": 0.1 }),
             },
         }
 
@@ -904,6 +892,12 @@ class PixelOEPixelize:
     CATEGORY = "essentials/image processing"
 
     def execute(self, image, downscale_mode, target_size, patch_size, thickness, color_matching, upscale):
+        # Lazy NumPy import: only needed if this node is used
+        try:
+            import numpy as np
+        except Exception:
+            raise RuntimeError("PixelOEPixelize requires NumPy. On ComfyAI.run (no NumPy), please disable this node or use an alternative pixelizer.")
+
         from pixeloe.pixelize import pixelize
 
         image = image.clone().mul(255).clamp(0, 255).byte().cpu().numpy()
@@ -945,7 +939,7 @@ class ImagePosterize:
 
         return(image,)
 
-# From https://github.com/yoonsikp/pycubelut/blob/master/pycubelut.py (MIT license)
+# Torch-only .cube LUT loader and applier (replaces NumPy/colour dependency)
 class ImageApplyLUT:
     @classmethod
     def INPUT_TYPES(s):
@@ -962,54 +956,115 @@ class ImageApplyLUT:
     FUNCTION = "execute"
     CATEGORY = "essentials/image processing"
 
-    # TODO: check if we can do without numpy
     def execute(self, image, lut_file, gamma_correction, clip_values, strength):
         lut_file_path = folder_paths.get_full_path("luts", lut_file)
         if not lut_file_path or not Path(lut_file_path).exists():
             print(f"Could not find LUT file: {lut_file_path}")
             return (image,)
             
-        from colour.io.luts.iridas_cube import read_LUT_IridasCube
-        
         device = image.device
-        lut = read_LUT_IridasCube(lut_file_path)
-        lut.name = lut_file
 
+        # ---- parse .cube (DOMAIN_MIN/MAX, LUT_3D_SIZE, table) ----
+        size = None
+        domain_min = torch.tensor([0.0, 0.0, 0.0], dtype=torch.float32, device=device)
+        domain_max = torch.tensor([1.0, 1.0, 1.0], dtype=torch.float32, device=device)
+        table = []
+
+        with open(lut_file_path, "r", encoding="utf-8", errors="ignore") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                parts = line.split()
+                key = parts[0].upper()
+                if key == "TITLE":
+                    continue
+                elif key == "DOMAIN_MIN" and len(parts) >= 4:
+                    domain_min = torch.tensor(list(map(float, parts[1:4])), dtype=torch.float32, device=device)
+                elif key == "DOMAIN_MAX" and len(parts) >= 4:
+                    domain_max = torch.tensor(list(map(float, parts[1:4])), dtype=torch.float32, device=device)
+                elif key == "LUT_3D_SIZE" and len(parts) >= 2:
+                    size = int(float(parts[1]))
+                else:
+                    # data row: R G B
+                    if len(parts) >= 3:
+                        table.append([float(parts[0]), float(parts[1]), float(parts[2])])
+
+        if size is None or not table:
+            print(f"[ImageApplyLUT] Invalid .cube: {lut_file}")
+            return (image,)
+
+        table_t = torch.tensor(table, dtype=torch.float32, device=device).view(size, size, size, 3)  # (S,S,S,3)
+
+        # ---- optional clip of table to domain ----
         if clip_values:
-            if lut.domain[0].max() == lut.domain[0].min() and lut.domain[1].max() == lut.domain[1].min():
-                lut.table = np.clip(lut.table, lut.domain[0, 0], lut.domain[1, 0])
-            else:
-                if len(lut.table.shape) == 2:  # 3x1D
-                    for dim in range(3):
-                        lut.table[:, dim] = np.clip(lut.table[:, dim], lut.domain[0, dim], lut.domain[1, dim])
-                else:  # 3D
-                    for dim in range(3):
-                        lut.table[:, :, :, dim] = np.clip(lut.table[:, :, :, dim], lut.domain[0, dim], lut.domain[1, dim])
+            table_t = torch.minimum(torch.maximum(table_t, domain_min), domain_max)
 
-        out = []
-        for img in image: # TODO: is this more resource efficient? should we use a batch instead?
-            lut_img = img.cpu().numpy().copy()
+        def apply_lut_3d(img_hw3: torch.Tensor) -> torch.Tensor:
+            # img in [0,1], HWC
+            img = img_hw3
+            # remap to domain if non-default
+            dom_min = domain_min
+            dom_max = domain_max
+            dom_scale = dom_max - dom_min
+            non_default = (dom_scale.abs() > 1e-8).any()
+            if non_default:
+                img = img * dom_scale + dom_min
 
-            is_non_default_domain = not np.array_equal(lut.domain, np.array([[0., 0., 0.], [1., 1., 1.]]))
-            dom_scale = None
-            if is_non_default_domain:
-                dom_scale = lut.domain[1] - lut.domain[0]
-                lut_img = lut_img * dom_scale + lut.domain[0]
             if gamma_correction:
-                lut_img = lut_img ** (1/2.2)
-            lut_img = lut.apply(lut_img)
-            if gamma_correction:
-                lut_img = lut_img ** (2.2)
-            if is_non_default_domain:
-                lut_img = (lut_img - lut.domain[0]) / dom_scale
+                img = torch.clamp(img, 0.0, 1.0) ** (1.0 / 2.2)
 
-            lut_img = torch.from_numpy(lut_img).to(device)
+            # normalize to [0, S-1] grid coords
+            S = size
+            g = (img - dom_min) / (dom_scale + 1e-8) if non_default else img
+            g = torch.clamp(g, 0.0, 1.0) * (S - 1)
+
+            g0 = torch.floor(g).to(torch.int64)
+            g1 = torch.clamp(g0 + 1, max=S - 1)
+            w = (g - g0.float()).clamp(0, 1)
+
+            r0, g0c, b0 = g0.unbind(-1)
+            r1, g1c, b1 = g1.unbind(-1)
+            wr, wg, wb = w.unbind(-1)
+
+            def sample(rr, gg, bb):
+                return table_t[rr, gg, bb]  # (3,)
+
+            # trilinear interpolation (8 corners)
+            c000 = sample(r0, g0c, b0)
+            c001 = sample(r0, g0c, b1)
+            c010 = sample(r0, g1c, b0)
+            c011 = sample(r0, g1c, b1)
+            c100 = sample(r1, g0c, b0)
+            c101 = sample(r1, g0c, b1)
+            c110 = sample(r1, g1c, b0)
+            c111 = sample(r1, g1c, b1)
+
+            c00 = c000 * (1 - wb).unsqueeze(-1) + c001 * wb.unsqueeze(-1)
+            c01 = c010 * (1 - wb).unsqueeze(-1) + c011 * wb.unsqueeze(-1)
+            c10 = c100 * (1 - wb).unsqueeze(-1) + c101 * wb.unsqueeze(-1)
+            c11 = c110 * (1 - wb).unsqueeze(-1) + c111 * wb.unsqueeze(-1)
+
+            c0 = c00 * (1 - wg).unsqueeze(-1) + c01 * wg.unsqueeze(-1)
+            c1 = c10 * (1 - wg).unsqueeze(-1) + c11 * wg.unsqueeze(-1)
+
+            out = c0 * (1 - wr).unsqueeze(-1) + c1 * wr.unsqueeze(-1)
+
+            if gamma_correction:
+                out = torch.clamp(out, 0.0, 1.0) ** 2.2
+
+            if non_default:
+                out = (out - dom_min) / (dom_scale + 1e-8)
+            return out
+
+        out_frames = []
+        for img in image:  # (H,W,C)
+            out_img = apply_lut_3d(img)
             if strength < 1.0:
-                lut_img = strength * lut_img + (1 - strength) * img
-            out.append(lut_img)
+                out_img = strength * out_img + (1.0 - strength) * img
+            out_frames.append(out_img)
 
-        out = torch.stack(out)
-
+        out = torch.stack(out_frames, dim=0).clamp(0, 1)
         return (out, )
 
 # From https://github.com/Jamy-L/Pytorch-Contrast-Adaptive-Sharpening/
@@ -1063,7 +1118,6 @@ class ImageCAS:
 
         output = ((b + d + f + h)*w + e) * div
         output = output.clamp(0, 1)
-        #output = torch.nan_to_num(output)
 
         output = output.permute([0,2,3,1])
 
@@ -1086,36 +1140,33 @@ class ImageSmartSharpen:
     FUNCTION = "execute"
 
     def execute(self, image, noise_radius, preserve_edges, sharpen, ratio):
-        import cv2
+        # image: (B,H,W,C) in [0,1]
+        imgs = image.permute(0, 3, 1, 2)  # BCHW
 
-        output = []
-        #diagonal = np.sqrt(image.shape[1]**2 + image.shape[2]**2)
-        if preserve_edges > 0:
-            preserve_edges = max(1 - preserve_edges, 0.05)
+        # edge-preserving blur (approx)
+        blur = imgs
+        if noise_radius > 1:
+            try:
+                # kornia >=0.7
+                from kornia.filters import bilateral_blur
+                sigma_color = max(1 - preserve_edges, 0.05)
+                k = max(3, 2 * int(noise_radius) + 1)
+                blur = bilateral_blur(imgs, (k, k), sigma_color=sigma_color, sigma_space=noise_radius)
+            except Exception:
+                # fallback: gaussian blur
+                k = max(3, 2 * int(noise_radius) + 1)
+                sigma = 0.3 * ((noise_radius - 1) * 0.5 - 1) + 0.8
+                blur = kornia.filters.gaussian_blur2d(imgs, (k, k), (sigma, sigma))
 
-        for img in image:
-            if noise_radius > 1:
-                sigma = 0.3 * ((noise_radius - 1) * 0.5 - 1) + 0.8 # this is what pytorch uses for blur
-                #sigma_color = preserve_edges * (diagonal / 2048)
-                blurred = cv2.bilateralFilter(img.cpu().numpy(), noise_radius, preserve_edges, sigma)
-                blurred = torch.from_numpy(blurred)
-            else:
-                blurred = img
+        # sharpen branch with Kornia
+        if sharpen > 0:
+            sharp = kornia.enhance.sharpness(imgs, amount=sharpen)
+        else:
+            sharp = imgs
 
-            if sharpen > 0:
-                sharpened = kornia.enhance.sharpness(img.permute(2,0,1), sharpen).permute(1,2,0)
-            else:
-                sharpened = img
-
-            img = ratio * sharpened + (1 - ratio) * blurred
-            img = torch.clamp(img, 0, 1)
-            output.append(img)
-        
-        del blurred, sharpened
-        output = torch.stack(output)
-
-        return (output,)
-
+        mixed = ratio * sharp + (1.0 - ratio) * blur
+        mixed = mixed.clamp(0, 1)
+        return (mixed.permute(0, 2, 3, 1),)
 
 class ExtractKeyframes:
     @classmethod
@@ -1137,7 +1188,6 @@ class ExtractKeyframes:
         window_size = 2
 
         variations = torch.sum(torch.abs(image[1:] - image[:-1]), dim=[1, 2, 3])
-        #variations = torch.sum((image[1:] - image[:-1]) ** 2, dim=[1, 2, 3])
         threshold = torch.quantile(variations.float(), threshold).item()
 
         keyframes = []
@@ -1440,8 +1490,12 @@ class ImageHistogramMatch:
             out = factor * out + (1 - factor) * image
             out = out.permute([0, 2, 3, 1]).clamp(0, 1)
         else:
-            from skimage.exposure import match_histograms
-
+            # Lazy import for skimage + numpy
+            try:
+                import numpy as np  # noqa: F401
+                from skimage.exposure import match_histograms
+            except Exception:
+                raise RuntimeError("Histogram match (skimage) requires NumPy + scikit-image. Use the 'pytorch' method on ComfyAI.run.")
             out = torch.from_numpy(match_histograms(image.cpu().numpy(), reference.cpu().numpy(), channel_axis=3)).to(device)
             out = factor * out + (1 - factor) * image.to(device)
 
@@ -1555,12 +1609,21 @@ class ImagePreviewFromLatent(SaveImage):
             img = pillow(ImageOps.exif_transpose, img)
             if img.mode == "I":
                 img = img.point(lambda i: i * (1 / 255))
-            image = img.convert("RGB")
-            image = np.array(image).astype(np.float32) / 255.0
-            image = torch.from_numpy(image)[None,]
-            if "A" in img.getbands():
-                mask = np.array(img.getchannel('A')).astype(np.float32) / 255.0
-                mask = 1. - torch.from_numpy(mask)
+
+            img = img.convert("RGBA") if "A" in img.getbands() else img.convert("RGB")
+            w, h = img.size
+            bands = len(img.getbands())
+
+            raw = torch.frombuffer(img.tobytes(), dtype=torch.uint8).view(h, w, bands).float() / 255.0
+            if bands == 4:
+                rgb = raw[..., :3]
+                alpha = raw[..., 3]
+                mask = 1.0 - alpha  # invert alpha to match previous semantics
+            else:
+                rgb = raw
+                mask = torch.zeros((h, w), dtype=torch.float32)
+
+            image = rgb.unsqueeze(0)  # (1,H,W,3)
             ui = {
                 "filename": os.path.basename(image_path),
                 "subfolder": os.path.dirname(image_path),
@@ -1657,8 +1720,6 @@ class NoiseFromImage:
 
         fine_noise = torch.stack(fine_noise, dim=0)
         fine_noise = fine_noise.permute([0, 2, 3, 1])
-        #fine_noise = torch.stack(fine_noise, dim=0)
-        #fine_noise = pb(fine_noise)
         mask_scale_diff = min(mask_scale_diff, 0.99)
         if mask_scale_diff > 0:
             coarse_noise = F.interpolate(fine_noise.permute([0, 3, 1, 2]), scale_factor=1-mask_scale_diff, mode='area')
